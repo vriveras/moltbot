@@ -524,6 +524,7 @@ export function createOpenClawCodingTools(options?: {
     safeBinTrustedDirs: options?.exec?.safeBinTrustedDirs ?? execConfig.safeBinTrustedDirs,
     safeBinProfiles: options?.exec?.safeBinProfiles ?? execConfig.safeBinProfiles,
     agentId,
+    runId: options?.runId,
     cwd: workspaceRoot,
     allowBackground,
     scopeKey,

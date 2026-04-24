@@ -59,6 +59,7 @@ import {
   resolveWorkdir,
   truncateMiddle,
 } from "./bash-tools.shared.js";
+import { consumeExecutionMetadataForToolCall } from "./pi-tools.before-tool-call.js";
 import { EXEC_TOOL_DISPLAY_SUMMARY } from "./tool-description-presets.js";
 import { type AgentToolWithMeta, failedTextResult, textResult } from "./tools/common.js";
 
@@ -1441,7 +1442,7 @@ export function createExecTool(
       return describeExecTool({ agentId, hasCronTool: defaults?.hasCronTool === true });
     },
     parameters: execSchema,
-    execute: async (_toolCallId, args, signal, onUpdate) => {
+    execute: async (toolCallId, args, signal, onUpdate) => {
       const params = args as {
         command: string;
         workdir?: string;
@@ -1764,6 +1765,10 @@ export function createExecTool(
         await validateScriptFileForShellBleed({ command: params.command, workdir });
       }
 
+      const executionMetadata = toolCallId
+        ? consumeExecutionMetadataForToolCall(toolCallId, defaults?.runId)
+        : undefined;
+
       const run = await runExecProcess({
         command: params.command,
         execCommand: execCommandOverride,
@@ -1781,6 +1786,7 @@ export function createExecTool(
         sessionKey: notifySessionKey,
         notifyDeliveryContext,
         timeoutSec: effectiveTimeout,
+        executionMetadata,
         onUpdate,
       });
 

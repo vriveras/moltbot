@@ -17,6 +17,7 @@ export type ExecToolDefaults = {
   safeBinTrustedDirs?: string[];
   safeBinProfiles?: Record<string, SafeBinProfileFixture>;
   agentId?: string;
+  runId?: string;
   backgroundMs?: number;
   timeoutSec?: number;
   approvalWarningText?: string;

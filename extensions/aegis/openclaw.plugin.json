@@ -1,0 +1,32 @@
+{
+  "id": "aegis",
+  "name": "Aegis Governance",
+  "description": "Runtime governance for OpenClaw tool execution — policy-as-code, audit trail, and approval workflows powered by Aegis.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": { "type": "boolean", "default": true },
+      "aegisBinaryPath": { "type": "string", "description": "Path to aegis binary" },
+      "policyPath": { "type": "string", "description": "Override .aegis/policy.rego path" },
+      "auditLogPath": { "type": "string", "description": "JSONL audit log output path" },
+      "approvalTimeoutMs": {
+        "type": "integer",
+        "default": 1800000,
+        "description": "Approval timeout (ms)"
+      },
+      "approvalTimeoutBehavior": {
+        "type": "string",
+        "enum": ["allow", "deny"],
+        "default": "deny"
+      },
+      "approvalSeverity": {
+        "type": "string",
+        "enum": ["info", "warning", "critical"],
+        "default": "warning"
+      },
+      "healthCheckIntervalMs": { "type": "integer", "default": 30000 },
+      "redactPatterns": { "type": "array", "items": { "type": "string" }, "default": [] }
+    }
+  }
+}

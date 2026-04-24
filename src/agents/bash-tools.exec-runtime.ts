@@ -559,6 +559,7 @@ export async function runExecProcess(opts: {
   sessionKey?: string;
   notifyDeliveryContext?: DeliveryContext;
   timeoutSec: number | null;
+  executionMetadata?: Record<string, unknown>;
   onUpdate?: (partialResult: AgentToolResult<ExecToolDetails>) => void;
 }): Promise<ExecProcessHandle> {
   const startedAt = Date.now();
@@ -692,6 +693,7 @@ export async function runExecProcess(opts: {
         workdir: opts.containerWorkdir ?? opts.sandbox.containerWorkdir,
         env: shellRuntimeEnv,
         usePty: opts.usePty,
+        executionMetadata: opts.executionMetadata,
       });
       sandboxFinalizeToken = backendExecSpec?.finalizeToken;
       return {

@@ -1028,6 +1028,9 @@ export function createHookRunner(
               (next.requireApproval
                 ? { ...next.requireApproval, pluginId: reg.pluginId }
                 : undefined),
+            executionMetadata: next.executionMetadata
+              ? { ...acc?.executionMetadata, ...next.executionMetadata }
+              : acc?.executionMetadata,
           };
         },
         shouldStop: (result) => result.block === true,

@@ -431,6 +431,8 @@ export type PluginHookBeforeToolCallResult = {
     pluginId?: string;
     onResolution?: (decision: PluginApprovalResolution) => Promise<void> | void;
   };
+  /** Opaque metadata from governance/policy plugins, forwarded to the execution layer. */
+  executionMetadata?: Record<string, unknown>;
 };
 
 export type PluginHookAfterToolCallEvent = {

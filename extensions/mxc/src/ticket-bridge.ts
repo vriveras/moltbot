@@ -38,7 +38,7 @@ export function extractExecutionContext(
       );
     }
     return {
-      envelope: result.ticket.envelope ?? {},
+      envelope: (result.ticket.envelope ?? {}) as AegisExecutionEnvelope,
       ticketToolName: result.ticket.toolName,
       ticketArgsHash: result.ticket.argsHash,
     };

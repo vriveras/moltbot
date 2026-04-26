@@ -52,9 +52,10 @@ export function createMxcSandboxBackendHandle(params: {
       const policy = translateEnvelopeToPolicy(ctx.envelope);
 
       // Create ContainerConfig from policy
+      // SDK currently only supports "process" containment; future types will be added
       const containerConfig = createConfigFromPolicy(
         policy,
-        params.config.defaultContainment,
+        params.config.defaultContainment as "process",
       );
 
       // Set command and working directory
@@ -84,7 +85,7 @@ export function createMxcSandboxBackendHandle(params: {
         networkEnabled: false,
         timeoutSeconds: 30,
       });
-      const containerConfig = createConfigFromPolicy(policy, params.config.defaultContainment);
+      const containerConfig = createConfigFromPolicy(policy, params.config.defaultContainment as "process");
       containerConfig.process!.commandLine = cmdParams.script;
 
       const args = ["--config-base64", configToBase64(containerConfig)];
@@ -95,7 +96,6 @@ export function createMxcSandboxBackendHandle(params: {
           input: cmdParams.stdin,
           timeout: 30_000,
           maxBuffer: 10 * 1024 * 1024,
-          signal: cmdParams.signal ?? undefined,
         });
         return { stdout: Buffer.from(result), stderr: Buffer.alloc(0), code: 0 };
       } catch (err: unknown) {

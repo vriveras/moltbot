@@ -1,0 +1,31 @@
+{
+  "id": "mxc",
+  "name": "MXC Sandbox Execution",
+  "description": "OS-level sandboxed tool execution via MXC — enforces Aegis policy constraints with AppContainer (Windows) and LXC (Linux).",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": { "type": "boolean", "default": true },
+      "mxcBinaryPath": {
+        "type": "string",
+        "description": "Override auto-discovery of wxc-exec/lxc-exec"
+      },
+      "aegisPublicKeyPath": {
+        "type": "string",
+        "description": "Override ECDSA public key discovery for ticket verification"
+      },
+      "defaultContainment": {
+        "type": "string",
+        "enum": ["process", "wslc", "microvm"],
+        "default": "process",
+        "description": "Default containment type for sandbox containers"
+      },
+      "debug": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable wxc-exec debug output"
+      }
+    }
+  }
+}

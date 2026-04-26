@@ -14,10 +14,11 @@ export function registerAegisAfterHooks(
       if (config.enabled === false) return;
 
       const payload: OpenClawActionPayload = {
+        runtime: "openclaw",
+        cwd: process.cwd(),
         toolName: event.toolName,
-        params: event.params ?? {},
+        toolArgs: event.params ?? {},
         agentId: ctx.agentId,
-        sessionKey: ctx.sessionKey,
         sessionId: ctx.sessionId,
         runId: event.runId ?? ctx.runId,
         toolCallId: event.toolCallId ?? ctx.toolCallId,

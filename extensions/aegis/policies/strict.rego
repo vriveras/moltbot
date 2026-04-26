@@ -1,56 +1,144 @@
 package aegis
 
+import rego.v1
+
 # =============================================================================
 # Strict Policy
 # =============================================================================
-# Every tool call requires human approval, except for read-only operations.
-# Use this in high-security environments where a human must explicitly approve
-# every action that modifies state.
+# Enterprise / compliance posture: deny by default, allow only read-only
+# operations, and require explicit human approval for everything else.
+# Destructive commands are hard-denied — no approval can override them.
 #
-# This policy trades speed for safety — every write, execute, or network call
-# will pause and wait for human confirmation.
+# All non-read actions run inside a tight executionEnvelope with network
+# disabled and a reasonable timeout.
+#
+# Input schema: input.action.{kind, name, args, runtime, sessionId, cwd}
+# Output schema: {permissionDecision, permissionDecisionReason, ruleName,
+#                  executionEnvelope}
 # =============================================================================
 
-# Strict default — every tool call requires human approval
-default result = {
-    "decision": "ask",
-    "reason": "strict policy — all tool calls require approval"
+# ── Default: deny everything not explicitly matched ──────────────────────────
+
+default result := {
+	"permissionDecision": "deny",
+	"permissionDecisionReason": "No matching rule; strict policy denies by default.",
 }
 
-# ---------------------------------------------------------------------------
-# Allow rules — only truly read-only operations bypass approval
-# ---------------------------------------------------------------------------
+# ── Helper sets ──────────────────────────────────────────────────────────────
 
-# Allow reading files without approval — no side effects
-result = {"decision": "allow", "reason": "read-only — no approval needed"} {
-    input.action.name == "read_file"
+safe_tools := {"view", "glob", "grep"}
+
+shell_tools := {"powershell", "bash"}
+
+destructive_patterns := [
+	"rm -rf",
+	"Remove-Item.*-Recurse",
+	"format c:",
+	"mkfs",
+	"drop\\s+table",
+]
+
+# ── Helper rules ─────────────────────────────────────────────────────────────
+
+_command := cmd if {
+	cmd := object.get(input.action.args, "command", "")
 }
 
-# Allow listing directories without approval — no side effects
-result = {"decision": "allow", "reason": "read-only — no approval needed"} {
-    input.action.name == "list_directory"
+_path := p if {
+	p := object.get(input.action.args, "path", "<unknown>")
 }
 
-# Allow viewing file contents without approval
-result = {"decision": "allow", "reason": "read-only — no approval needed"} {
-    input.action.name == "view"
+is_destructive if {
+	some pattern in destructive_patterns
+	regex.match(pattern, _command)
 }
 
-# Allow code search without approval
-result = {"decision": "allow", "reason": "read-only — no approval needed"} {
-    input.action.name == "grep"
+is_network_action if {
+	input.action.name in {"web_fetch", "curl", "wget"}
 }
 
-result = {"decision": "allow", "reason": "read-only — no approval needed"} {
-    input.action.name == "glob"
+is_network_command if {
+	input.action.name in shell_tools
+	some kw in ["curl ", "wget ", "Invoke-WebRequest", "Invoke-RestMethod", "iwr ", "irm "]
+	contains(_command, kw)
 }
 
-# ---------------------------------------------------------------------------
-# Deny rules — some operations are never allowed, even with approval
-# ---------------------------------------------------------------------------
+# ── Tight execution envelope applied to all approved mutable actions ─────────
 
-# Unconditionally deny destructive commands — no approval can override
-result = {"decision": "deny", "reason": "destructive command unconditionally blocked"} {
-    input.action.name == "bash"
-    contains(input.action.args.command, "rm -rf /")
+_strict_envelope := {
+	"networkEnabled": false,
+	"timeoutSeconds": 120,
+}
+
+# ── Deny rules ───────────────────────────────────────────────────────────────
+
+# Destructive commands — hard deny, no approval possible
+result := {
+	"permissionDecision": "deny",
+	"permissionDecisionReason": "Destructive commands are blocked by policy",
+	"ruleName": "deny-destructive",
+} if {
+	input.action.name in shell_tools
+	is_destructive
+}
+
+# Network tools — hard deny
+result := {
+	"permissionDecision": "deny",
+	"permissionDecisionReason": "Network access is blocked by policy",
+	"ruleName": "deny-network-tool",
+} if {
+	is_network_action
+}
+
+# Network commands inside shells — hard deny
+result := {
+	"permissionDecision": "deny",
+	"permissionDecisionReason": "Network commands are blocked by policy",
+	"ruleName": "deny-network-command",
+} if {
+	is_network_command
+}
+
+# ── Allow rules (read-only only) ─────────────────────────────────────────────
+
+# Read-only tools — always safe, no approval needed
+result := {
+	"permissionDecision": "allow",
+	"ruleName": "allow-safe-tools",
+} if {
+	input.action.kind == "tool_call"
+	input.action.name in safe_tools
+}
+
+# File reads — always safe
+result := {
+	"permissionDecision": "allow",
+	"ruleName": "allow-file-read",
+} if {
+	input.action.kind == "file_read"
+}
+
+# ── Ask rules (everything else requires human approval) ──────────────────────
+
+# File writes require approval with path context
+result := {
+	"permissionDecision": "ask",
+	"permissionDecisionReason": sprintf("File write requires approval — %s", [_path]),
+	"ruleName": "ask-file-write",
+	"executionEnvelope": _strict_envelope,
+} if {
+	input.action.kind == "file_write"
+}
+
+# Shell commands require approval (unless already denied above)
+result := {
+	"permissionDecision": "ask",
+	"permissionDecisionReason": "Shell command requires approval",
+	"ruleName": "ask-shell",
+	"executionEnvelope": _strict_envelope,
+} if {
+	input.action.name in shell_tools
+	not is_destructive
+	not is_network_command
 }

@@ -10,6 +10,12 @@
       "aegisBinaryPath": { "type": "string", "description": "Path to aegis binary" },
       "policyPath": { "type": "string", "description": "Override .aegis/policy.rego path" },
       "auditLogPath": { "type": "string", "description": "JSONL audit log output path" },
+      "failBehavior": {
+        "type": "string",
+        "enum": ["allow", "deny"],
+        "default": "allow",
+        "description": "Behavior when Aegis daemon is unreachable (allow or deny tool execution)"
+      },
       "approvalTimeoutMs": {
         "type": "integer",
         "default": 1800000,
@@ -26,7 +32,22 @@
         "default": "warning"
       },
       "healthCheckIntervalMs": { "type": "integer", "default": 30000 },
-      "redactPatterns": { "type": "array", "items": { "type": "string" }, "default": [] }
+      "redactPatterns": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [],
+        "description": "DEPRECATED: Use redactKeyPatterns and redactValuePatterns instead"
+      },
+      "redactKeyPatterns": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Substring patterns to match against argument key names for redaction"
+      },
+      "redactValuePatterns": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Regex patterns to match against string values for redaction"
+      }
     }
   }
 }

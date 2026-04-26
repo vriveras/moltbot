@@ -1,8 +1,9 @@
 import { appendFile } from "node:fs";
-import { join } from "node:path";
+import { join, resolve as pathResolve } from "node:path";
 import type { OpenClawActionPayload } from "./action-request.js";
 import type { AegisDaemonResponse } from "./decision.js";
-import type { AegisPluginConfig } from "./config.js";
+import { redactArgs, compileValuePatterns } from "./redaction.js";
+import { DEFAULT_REDACT_KEY_PATTERNS, DEFAULT_REDACT_VALUE_PATTERNS } from "./constants.js";
 
 type AegisAuditEvent = {
   eventType: string;
@@ -35,15 +36,22 @@ const DEFAULT_AUDIT_LOG_PATH = join(".aegis", "openclaw-events.jsonl");
 
 export class AegisAuditEmitter {
   private readonly logPath: string;
-  private readonly redactPatterns: RegExp[];
+  private readonly redactValuePatterns: RegExp[];
+  private readonly redactKeyPatterns: string[];
 
   constructor(
-    config: Pick<AegisPluginConfig, "auditLogPath" | "redactPatterns">,
+    config: {
+      auditLogPath?: string;
+      redactKeyPatterns?: string[];
+      redactValuePatterns?: string[];
+    },
   ) {
-    this.logPath = config.auditLogPath ?? DEFAULT_AUDIT_LOG_PATH;
-    this.redactPatterns = (config.redactPatterns ?? []).map(
-      (p) => new RegExp(p, "g"),
-    );
+    const rawPath = config.auditLogPath ?? DEFAULT_AUDIT_LOG_PATH;
+    this.logPath = pathResolve(rawPath);
+
+    const rawValuePatterns = config.redactValuePatterns ?? DEFAULT_REDACT_VALUE_PATTERNS;
+    this.redactValuePatterns = compileValuePatterns(rawValuePatterns);
+    this.redactKeyPatterns = config.redactKeyPatterns ?? DEFAULT_REDACT_KEY_PATTERNS;
   }
 
   emitRequested(payload: OpenClawActionPayload): void {
@@ -58,16 +66,9 @@ export class AegisAuditEmitter {
   ): void {
     const event = this.buildBaseEvent("aegis.action.decided", payload);
     event.decision = {
-      decision: decision.action,
-      reason: decision.reason,
-      ruleName: decision.policyId,
+      decision: decision.permissionDecision,
+      reason: decision.permissionDecisionReason,
     };
-    this.write(event);
-  }
-
-  emitStarted(payload: OpenClawActionPayload): void {
-    const event = this.buildBaseEvent("aegis.action.started", payload);
-    event.context = { cwd: process.cwd(), traceId: payload.runId };
     this.write(event);
   }
 
@@ -83,6 +84,33 @@ export class AegisAuditEmitter {
     this.write(event);
   }
 
+  emitApprovalResolved(
+    toolCallId: string,
+    toolName: string,
+    resolution: string,
+    sessionId?: string,
+  ): void {
+    const event: AegisAuditEvent = {
+      eventType: "aegis.approval.resolved",
+      timestamp: new Date().toISOString(),
+      sessionId: sessionId ?? "",
+      runtime: "openclaw",
+      action: {
+        kind: "tool_call",
+        name: toolName,
+        args: {},
+      },
+      decision: {
+        decision: resolution,
+      },
+      context: {
+        cwd: process.cwd(),
+        traceId: toolCallId,
+      },
+    };
+    this.write(event);
+  }
+
   dispose(): void {
     // No buffered writes to flush — appendFile callbacks complete naturally.
   }
@@ -94,12 +122,12 @@ export class AegisAuditEmitter {
     return {
       eventType,
       timestamp: new Date().toISOString(),
-      sessionId: payload.sessionId ?? payload.sessionKey ?? "",
+      sessionId: payload.sessionId ?? "",
       runtime: "openclaw",
       action: {
         kind: "tool_call",
         name: payload.toolName,
-        args: this.redactArgs(payload.params),
+        args: this.redactArgs(payload.toolArgs),
       },
     };
   }
@@ -107,24 +135,11 @@ export class AegisAuditEmitter {
   private redactArgs(
     args: Record<string, unknown>,
   ): Record<string, unknown> {
-    if (this.redactPatterns.length === 0) return args;
-    const redacted: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(args)) {
-      if (typeof value === "string") {
-        let matched = false;
-        for (const pattern of this.redactPatterns) {
-          pattern.lastIndex = 0;
-          if (pattern.test(value)) {
-            matched = true;
-            break;
-          }
-        }
-        redacted[key] = matched ? "[REDACTED]" : value;
-      } else {
-        redacted[key] = value;
-      }
-    }
-    return redacted;
+    return redactArgs(
+      args,
+      this.redactKeyPatterns,
+      this.redactValuePatterns,
+    ) as Record<string, unknown>;
   }
 
   private write(event: AegisAuditEvent): void {

@@ -1,8 +1,9 @@
 export type OpenClawActionPayload = {
+  runtime: "openclaw";
+  cwd: string;
   toolName: string;
-  params: Record<string, unknown>;
+  toolArgs: Record<string, unknown>;
   agentId?: string;
-  sessionKey?: string;
   sessionId?: string;
   runId?: string;
   toolCallId?: string;

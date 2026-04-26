@@ -98,7 +98,7 @@ Every tool call emits up to four structured JSONL events:
 
 1. **`aegis.action.requested`** — Tool call intercepted, before policy evaluation.
 2. **`aegis.action.decided`** — Policy decision returned (allow/deny/ask + reason).
-3. **`aegis.action.started`** — Tool execution began (after approval if required).
+3. **`aegis.approval.resolved`** — User responded to an approval prompt (approve/deny/timeout).
 4. **`aegis.action.completed`** — Tool execution finished (success/failure + duration).
 
 Events are written to `.aegis/openclaw-events.jsonl` (configurable via `auditLogPath`).
@@ -141,14 +141,17 @@ All fields are optional. Defaults are applied when values are not provided.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `boolean` | `true` | Enable or disable the Aegis extension. When `false`, all hooks are skipped. |
-| `aegisBinaryPath` | `string` | `"aegis"` | Path to the `aegis` binary. Use an absolute path if not on `PATH`. |
+| `aegisBinaryPath` | `string` | `"aegis"` | Path to the `aegis` binary. Rejects shell metacharacters `` ;|&$`<>() ``. |
 | `policyPath` | `string` | _(none)_ | Override the default `.aegis/policy.rego` path for policy files. |
-| `auditLogPath` | `string` | `".aegis/openclaw-events.jsonl"` | Path for the JSONL audit log output file. |
+| `auditLogPath` | `string` | `".aegis/openclaw-events.jsonl"` | Path for the JSONL audit log output file. Rejects `..` path traversal. |
+| `failBehavior` | `"allow"` \| `"deny"` | `"allow"` | Behavior when the Aegis daemon is unreachable. `"allow"` = fail-open (tools proceed), `"deny"` = fail-closed (tools blocked). |
 | `approvalTimeoutMs` | `integer` | `1800000` (30 min) | How long to wait for human approval before timing out. |
 | `approvalTimeoutBehavior` | `"allow"` \| `"deny"` | `"deny"` | What to do when an approval request times out. |
 | `approvalSeverity` | `"info"` \| `"warning"` \| `"critical"` | `"warning"` | Default severity level shown in the approval prompt. |
 | `healthCheckIntervalMs` | `integer` | `30000` (30 s) | Interval between daemon health-check pings. |
-| `redactPatterns` | `string[]` | `[]` | List of regex patterns. Matching argument values are replaced with `[REDACTED]` in audit logs and approval descriptions. |
+| `redactKeyPatterns` | `string[]` | `["password", "token", "secret", "key", "auth", "credential"]` | Substring patterns matched against argument key names for redaction in audit events. |
+| `redactValuePatterns` | `string[]` | `["Bearer\\s+...", "sk-...", "ghp_...", "eyJ..."]` | Regex patterns matched against string values for redaction in audit events. |
+| `redactPatterns` | `string[]` | `[]` | **Deprecated.** Use `redactKeyPatterns` and `redactValuePatterns` instead. |
 
 ### Example configuration
 
@@ -159,10 +162,12 @@ All fields are optional. Defaults are applied when values are not provided.
     "aegisBinaryPath": "/usr/local/bin/aegis",
     "policyPath": ".aegis/policy.rego",
     "auditLogPath": ".aegis/openclaw-events.jsonl",
+    "failBehavior": "deny",
     "approvalTimeoutMs": 300000,
     "approvalTimeoutBehavior": "deny",
     "approvalSeverity": "warning",
-    "redactPatterns": ["password", "secret", "token"]
+    "redactKeyPatterns": ["password", "secret", "token"],
+    "redactValuePatterns": ["Bearer\\s+[A-Za-z0-9\\-._~+/]+=*", "sk-[A-Za-z0-9]{20,}"]
   }
 }
 ```
@@ -183,14 +188,16 @@ touch .aegis/policy.rego
 ```rego
 package aegis
 
+import rego.v1
+
 # Default deny — all tool calls require an explicit allow rule
-default result = {
-    "decision": "deny",
-    "reason": "no matching allow rule"
+default result := {
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "no matching allow rule",
 }
 
 # Allow read-only file operations
-result = {"decision": "allow", "reason": "read-only file operation"} {
+result := {"permissionDecision": "allow", "ruleName": "allow-read"} if {
     input.action.name == "read_file"
 }
 ```
@@ -255,9 +262,9 @@ See the [`policies/`](./policies/) directory for ready-to-use examples:
 
 ## Troubleshooting
 
-### "Aegis daemon unreachable — fail-closed"
+### "Aegis daemon unreachable"
 
-The extension could not reach the Aegis daemon. All tool calls will be **denied** (fail-closed behavior).
+The extension could not reach the Aegis daemon. By default (`failBehavior: "allow"`), tool calls will proceed without governance. Set `failBehavior: "deny"` for fail-closed behavior where all tool calls are blocked when the daemon is unreachable.
 
 **Check:**
 - Is the `aegis` binary on your `PATH`? Try running `aegis --version`.

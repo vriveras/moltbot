@@ -26,6 +26,13 @@ export function createAegisDaemonService(
       const alreadyRunning = await client.healthCheck();
       if (!alreadyRunning) {
         const binaryPath = config.aegisBinaryPath ?? "aegis";
+
+        // Validate binary path
+        if (binaryPath.includes("..") || /[;&|$`]/.test(binaryPath)) {
+          ctx.logger.warn(`Aegis binary path rejected (suspicious characters): ${binaryPath}`);
+          return;
+        }
+
         try {
           const child = spawn(binaryPath, ["--daemon"], {
             detached: true,
@@ -33,7 +40,7 @@ export function createAegisDaemonService(
           });
           child.unref();
         } catch (err) {
-          ctx.logger.warn(`Failed to spawn aegis daemon: ${err}`);
+          ctx.logger.warn(`Failed to spawn aegis daemon: ${err instanceof Error ? err.message : String(err)}`);
         }
 
         // Poll for daemon readiness up to 3 seconds
@@ -49,8 +56,9 @@ export function createAegisDaemonService(
         }
 
         if (!reachable) {
+          const failBehavior = config.failBehavior ?? "allow";
           ctx.logger.warn(
-            "Aegis daemon not reachable after 3s — IPC calls will fail-closed",
+            `Aegis daemon not reachable after 3s — IPC calls will fail-${failBehavior === "deny" ? "closed" : "open"}`,
           );
         }
       }

@@ -1,44 +1,131 @@
 package aegis
 
+import rego.v1
+
 # =============================================================================
 # Default Deny Policy
 # =============================================================================
-# Baseline security posture: deny all tool calls unless an explicit allow rule
-# matches. This is the recommended starting point for production environments.
+# Secure baseline posture: deny all actions unless an explicit rule matches.
+# Recommended starting point for production environments.
 #
-# Usage: copy to .aegis/policy.rego and add allow rules for your workflow.
+# - Read-only tools and file reads are allowed unconditionally.
+# - File writes and shell commands require human approval ("ask").
+# - Destructive commands and network access are hard-denied.
+#
+# Input schema: input.action.{kind, name, args, runtime, sessionId, cwd}
+# Output schema: {permissionDecision, permissionDecisionReason, ruleName,
+#                  executionEnvelope}
 # =============================================================================
 
-# Default deny — all tool calls require explicit allow rules
-default result = {
-    "decision": "deny",
-    "reason": "No matching allow rule — default deny policy"
+# ── Default: deny everything not explicitly matched ──────────────────────────
+
+default result := {
+	"permissionDecision": "deny",
+	"permissionDecisionReason": "No matching rule; default decision applied.",
 }
 
-# ---------------------------------------------------------------------------
-# Allow rules — add your own below
-# ---------------------------------------------------------------------------
+# ── Helper sets ──────────────────────────────────────────────────────────────
 
-# Allow reading files — no side effects, safe by default
-result = {"decision": "allow", "reason": "read-only file operation"} {
-    input.action.name == "read_file"
+safe_tools := {"view", "glob", "grep", "report_intent"}
+
+shell_tools := {"powershell", "bash"}
+
+destructive_patterns := [
+	"rm -rf",
+	"Remove-Item.*-Recurse",
+	"format c:",
+	"mkfs",
+	"drop\\s+table",
+]
+
+# ── Helper rules ─────────────────────────────────────────────────────────────
+
+_command := cmd if {
+	cmd := object.get(input.action.args, "command", "")
 }
 
-# Allow listing directories — no side effects, safe by default
-result = {"decision": "allow", "reason": "read-only file operation"} {
-    input.action.name == "list_directory"
+is_destructive if {
+	some pattern in destructive_patterns
+	regex.match(pattern, _command)
 }
 
-# Allow viewing file contents
-result = {"decision": "allow", "reason": "read-only file operation"} {
-    input.action.name == "view"
+is_network_tool if {
+	input.action.name in {"web_fetch", "curl", "wget"}
 }
 
-# Allow code search operations
-result = {"decision": "allow", "reason": "read-only search operation"} {
-    input.action.name == "grep"
+is_network_command if {
+	input.action.name in shell_tools
+	some kw in ["curl ", "wget ", "Invoke-WebRequest", "Invoke-RestMethod", "iwr ", "irm "]
+	contains(_command, kw)
 }
 
-result = {"decision": "allow", "reason": "read-only search operation"} {
-    input.action.name == "glob"
+# ── Deny rules (evaluated first by OPA conflict resolution) ──────────────────
+
+# Destructive commands — hard deny, never allow
+result := {
+	"permissionDecision": "deny",
+	"permissionDecisionReason": "Destructive commands are blocked by policy",
+	"ruleName": "deny-destructive",
+} if {
+	input.action.name in shell_tools
+	is_destructive
+}
+
+# Network access — hard deny
+result := {
+	"permissionDecision": "deny",
+	"permissionDecisionReason": "Network access is blocked by policy",
+	"ruleName": "deny-network",
+} if {
+	is_network_tool
+}
+
+result := {
+	"permissionDecision": "deny",
+	"permissionDecisionReason": "Network access is blocked by policy",
+	"ruleName": "deny-network-command",
+} if {
+	is_network_command
+}
+
+# ── Allow rules ──────────────────────────────────────────────────────────────
+
+# Read-only tools — always safe
+result := {
+	"permissionDecision": "allow",
+	"ruleName": "allow-safe-tools",
+} if {
+	input.action.kind == "tool_call"
+	input.action.name in safe_tools
+}
+
+# File reads — always safe
+result := {
+	"permissionDecision": "allow",
+	"ruleName": "allow-file-read",
+} if {
+	input.action.kind == "file_read"
+}
+
+# ── Ask rules ────────────────────────────────────────────────────────────────
+
+# File writes and creates require approval
+result := {
+	"permissionDecision": "ask",
+	"permissionDecisionReason": "File modification requires approval",
+	"ruleName": "ask-file-write",
+} if {
+	input.action.kind == "file_write"
+	not is_destructive
+}
+
+# Shell commands require approval (unless already denied above)
+result := {
+	"permissionDecision": "ask",
+	"permissionDecisionReason": "Shell command requires approval",
+	"ruleName": "ask-shell",
+} if {
+	input.action.name in shell_tools
+	not is_destructive
+	not is_network_command
 }

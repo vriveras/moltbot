@@ -3,6 +3,8 @@ import type { AegisIpcClient } from "./ipc-client.js";
 import type { AegisAuditEmitter } from "./audit-emitter.js";
 import type { AegisPluginConfig } from "./config.js";
 import type { OpenClawActionPayload } from "./action-request.js";
+import { buildApprovalRequest, handleApprovalResolution } from "./approval-bridge.js";
+import { DEFAULT_FAIL_BEHAVIOR } from "./constants.js";
 
 export function registerAegisHooks(
   api: OpenClawPluginApi,
@@ -15,11 +17,14 @@ export function registerAegisHooks(
       const config = getConfig();
       if (config.enabled === false) return;
 
+      const failBehavior = config.failBehavior ?? DEFAULT_FAIL_BEHAVIOR;
+
       const payload: OpenClawActionPayload = {
+        runtime: "openclaw",
+        cwd: process.cwd(),
         toolName: event.toolName,
-        params: event.params ?? {},
+        toolArgs: event.params ?? {},
         agentId: ctx.agentId,
-        sessionKey: ctx.sessionKey,
         sessionId: ctx.sessionId,
         runId: event.runId ?? ctx.runId,
         toolCallId: event.toolCallId ?? ctx.toolCallId,
@@ -31,52 +36,65 @@ export function registerAegisHooks(
       emitter.emitRequested(payload);
       emitter.emitDecided(payload, response);
 
-      if (response.action === "allow") {
+      if (response.permissionDecision === "allow") {
         return {
-          ...(response.modifiedParams ? { params: response.modifiedParams } : {}),
           block: false,
-          executionMetadata: response.executionMetadata
-            ? { ...response.executionMetadata }
+          executionMetadata: response.cookie
+            ? { aegisCookie: response.cookie }
             : undefined,
         };
       }
 
-      if (response.action === "deny") {
+      if (response.permissionDecision === "deny") {
         return {
           block: true,
-          blockReason: response.reason ?? "Denied by Aegis policy",
+          blockReason:
+            response.permissionDecisionReason ?? "Denied by Aegis policy",
         };
       }
 
-      if (response.action === "require_approval") {
+      if (response.permissionDecision === "ask") {
+        const approval = buildApprovalRequest(
+          event.toolName,
+          event.params ?? {},
+          response.permissionDecisionReason ?? "unknown",
+          config,
+        );
         return {
           requireApproval: {
-            title:
-              response.approvalTitle ??
-              `Aegis: Approval required for ${event.toolName}`,
-            description:
-              response.approvalDescription ??
-              `Policy requires approval: ${response.reason ?? "unknown"}\n\nTool: ${event.toolName}\nArgs: ${JSON.stringify(event.params)}`,
-            severity:
-              response.approvalSeverity ??
-              config.approvalSeverity ??
-              "warning",
-            timeoutMs: config.approvalTimeoutMs ?? 1_800_000,
-            timeoutBehavior: config.approvalTimeoutBehavior ?? "deny",
-            onResolution: async (_resolution) => {
-              // Approval resolution audit is handled by the approval bridge.
+            ...approval,
+            onResolution: async (_resolution: unknown) => {
+              const resolutionStr = String(_resolution);
+              const result = handleApprovalResolution(resolutionStr, response.cookie);
+              if (result.proceed) {
+                // Note: The pre-issued cookie cannot be propagated through OpenClaw's
+                // approval hook contract (onResolution returns void). If MXC sandbox
+                // constraints are needed post-approval, a future SDK enhancement or
+                // re-query mechanism is required.
+                console.info(`[aegis] Approval granted for ${event.toolName}`);
+              } else {
+                console.info(`[aegis] Approval denied for ${event.toolName}: ${resolutionStr}`);
+              }
+              emitter.emitApprovalResolved(
+                event.toolCallId ?? ctx.toolCallId ?? "",
+                event.toolName,
+                resolutionStr,
+                ctx.sessionId,
+              );
             },
           },
-          executionMetadata: response.executionMetadata
-            ? { ...response.executionMetadata }
-            : undefined,
+          // NO executionMetadata here — cookie should not leak before approval
         };
       }
-    } catch {
-      return {
-        block: true,
-        blockReason: "Aegis extension error — fail-closed",
-      };
+
+      // Unrecognized decision values use failBehavior
+      return { block: failBehavior === "deny" };
+    } catch (err) {
+      const failBehavior = getConfig().failBehavior ?? DEFAULT_FAIL_BEHAVIOR;
+      console.error("[aegis] before_tool_call error:", err);
+      return failBehavior === "deny"
+        ? { block: true, blockReason: "Aegis extension error — fail-closed" }
+        : { block: false };
     }
   });
 }

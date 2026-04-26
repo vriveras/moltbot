@@ -7,9 +7,7 @@
   "devDependencies": {
     "@openclaw/plugin-sdk": "workspace:*"
   },
-  "dependencies": {
-    "@microsoft/mxc-sdk": "file:../../../mxc-aegis/sdk"
-  },
+  "dependencies": {},
   "openclaw": {
     "extensions": [
       "./index.ts"

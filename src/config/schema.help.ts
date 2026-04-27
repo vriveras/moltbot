@@ -524,6 +524,14 @@ export const FIELD_HELP: Record<string, string> = {
     "Expose the local browser control server through node proxy routing so remote clients can use this host's browser capabilities. Keep disabled unless remote automation explicitly depends on it.",
   "nodeHost.browserProxy.allowProfiles":
     "Optional allowlist of browser profile names exposed through node proxy routing. Leave empty to preserve the default full profile surface, including profile create/delete routes. When set, OpenClaw enforces least-privilege profile access and blocks persistent profile create/delete through the proxy.",
+  "nodeHost.aegisEnforcement":
+    "Aegis sandbox enforcement settings for node-host command execution. When configured, commands run through the Aegis sandbox boundary. Leave unconfigured to run commands without sandbox enforcement.",
+  "nodeHost.aegisEnforcement.aegisBinaryPath":
+    "Absolute path to the Aegis CLI binary. When set, enables sandbox enforcement. Falls back to AEGIS_BINARY_PATH env var, then PATH lookup.",
+  "nodeHost.aegisEnforcement.mxcBinaryPath":
+    "Absolute path to the MXC execution binary (wxc-exec on Windows, lxc-exec on Linux). Falls back to MXC_BINARY_PATH env var, then PATH lookup.",
+  "nodeHost.aegisEnforcement.enabled":
+    "Whether Aegis sandbox enforcement is active. Defaults to true when aegisBinaryPath resolves to a valid binary. Set to false to explicitly disable enforcement even when binaries are present.",
   media:
     "Top-level media behavior shared across providers and tools that handle inbound files. Keep defaults unless you need stable filenames for external processing pipelines or longer-lived inbound media retention.",
   "media.preserveFilenames":

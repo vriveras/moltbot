@@ -1682,6 +1682,9 @@ export function createExecTool(
       }
 
       if (host === "node") {
+        const nodeExecutionMetadata = toolCallId
+          ? consumeExecutionMetadataForToolCall(toolCallId, defaults?.runId)
+          : undefined;
         return executeNodeHostCommand({
           command: params.command,
           workdir,
@@ -1706,6 +1709,7 @@ export function createExecTool(
           notifySessionKey,
           notifyOnExit,
           trustedSafeBinDirs,
+          executionMetadata: nodeExecutionMetadata,
         });
       }
 

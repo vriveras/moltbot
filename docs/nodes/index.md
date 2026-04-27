@@ -151,6 +151,38 @@ openclaw approvals allowlist add --node <id|name|ip> "/usr/bin/sw_vers"
 
 Approvals live on the node host at `~/.openclaw/exec-approvals.json`.
 
+### Aegis sandbox enforcement (node host)
+
+When the gateway forwards a `system.run` command to a remote node, it can include
+an `aegisCookie` in `executionMetadata`. The node host redeems this cookie with
+the local Aegis daemon over a named pipe, receives an `ExecutionEnvelope`
+describing sandbox constraints (timeouts, network rules, filesystem ACLs), translates
+it to an MXC `SandboxPolicy`, and wraps the command with `wxc-exec` (Windows) or
+`lxc-exec` (Linux). If any step fails — missing daemon, invalid cookie, binary not
+found — the command is **denied** (fail-closed).
+
+This is the **node-host side** of the dual-track Aegis+MXC enforcement. The gateway
+side (plugin-based) is documented in the [MXC extension](/extensions/mxc).
+
+Configuration (`nodeHost.aegisEnforcement`):
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | boolean | `true` | Enable/disable Aegis enforcement on this node |
+| `aegisBinaryPath` | string | auto-discover from `PATH` | Path to the `aegis` CLI binary |
+| `wxcExecPath` | string | auto-discover from `PATH` | Path to `wxc-exec` (Windows) or `lxc-exec` (Linux) |
+
+If both `aegis` and `wxc-exec`/`lxc-exec` are found on `PATH`, enforcement
+activates automatically. Set `enabled: false` to disable it explicitly.
+
+Env var overrides: `AEGIS_BINARY_PATH`, `MXC_BINARY_PATH`.
+
+Source modules:
+
+- `src/node-host/aegis-sandbox-enforcement.ts` — cookie redemption + argv wrapping
+- `src/node-host/aegis-config.ts` — config resolution and binary discovery
+- `src/shared/aegis-envelope.ts` — shared envelope types and envelope → policy translator
+
 ### Point exec at the node
 
 Configure defaults (gateway config):

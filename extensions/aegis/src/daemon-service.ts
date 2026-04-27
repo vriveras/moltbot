@@ -38,6 +38,10 @@ export function createAegisDaemonService(
             detached: true,
             stdio: "ignore",
           });
+          // Handle async spawn errors (e.g., ENOENT) to prevent uncaught exceptions
+          child.on("error", (err) => {
+            ctx.logger.warn(`Failed to spawn aegis daemon: ${err.message}`);
+          });
           child.unref();
         } catch (err) {
           ctx.logger.warn(`Failed to spawn aegis daemon: ${err instanceof Error ? err.message : String(err)}`);

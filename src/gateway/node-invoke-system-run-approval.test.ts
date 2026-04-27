@@ -93,6 +93,58 @@ describe("sanitizeSystemRunParamsForForwarding", () => {
     expect(result.details?.code).toBe(code);
   }
 
+  test("pickSystemRunParams forwards executionMetadata and strips unknown fields", () => {
+    const result = sanitizeSystemRunParamsForForwarding({
+      rawParams: {
+        command: ["echo", "hello"],
+        rawCommand: "echo hello",
+        executionMetadata: { aegisCookie: "test-cookie-123" },
+        __internalSecret: "should-be-stripped",
+      },
+      nodeId: "node-1",
+      client: null,
+      nowMs: now,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    const params = result.params as Record<string, unknown>;
+    expect(params.executionMetadata).toEqual({ aegisCookie: "test-cookie-123" });
+    expect(params).not.toHaveProperty("__internalSecret");
+  });
+
+  test("pickSystemRunParams omits executionMetadata when absent from input", () => {
+    const result = sanitizeSystemRunParamsForForwarding({
+      rawParams: {
+        command: ["echo", "hello"],
+        rawCommand: "echo hello",
+      },
+      nodeId: "node-1",
+      client: null,
+      nowMs: now,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    const params = result.params as Record<string, unknown>;
+    expect(params).not.toHaveProperty("executionMetadata");
+  });
+
+  test("pickSystemRunParams forwards null executionMetadata", () => {
+    const result = sanitizeSystemRunParamsForForwarding({
+      rawParams: {
+        command: ["echo", "hello"],
+        rawCommand: "echo hello",
+        executionMetadata: null,
+      },
+      nodeId: "node-1",
+      client: null,
+      nowMs: now,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    const params = result.params as Record<string, unknown>;
+    expect(params.executionMetadata).toBeNull();
+  });
+
   test("rejects cmd.exe /c trailing-arg mismatch against rawCommand", () => {
     const result = sanitizeSystemRunParamsForForwarding({
       rawParams: {

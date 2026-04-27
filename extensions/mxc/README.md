@@ -123,11 +123,11 @@ extensions/mxc/
 ├── src/
 │   ├── plugin.ts                Plugin registration — guards + registerSandboxBackend
 │   ├── mxc-backend.ts           SandboxBackendHandle — buildExecSpec, runShellCommand
-│   ├── envelope-translator.ts   ExecutionEnvelope → SandboxPolicy (pure function)
+│   ├── envelope-translator.ts   Re-exports translateEnvelopeToPolicy from src/shared/aegis-envelope.ts
 │   ├── ticket-bridge.ts         ECDSA ticket verification (fail-closed)
 │   ├── binary-resolver.ts       Find wxc-exec / lxc-exec
 │   ├── config.ts                Config type + resolveConfig()
-│   └── types.ts                 Shared types (AegisExecutionEnvelope, MxcExecutionContext)
+│   └── types.ts                 Re-exports AegisExecutionEnvelope, MxcExecutionContext from src/shared/aegis-envelope.ts
 └── test/
     ├── envelope-translator.test.ts   6 tests — field mapping + edge cases
     ├── ticket-bridge.test.ts         5 tests — signed ticket, fallback, fail-closed
@@ -135,6 +135,14 @@ extensions/mxc/
     ├── config.test.ts                4 tests — defaults, overrides, validation
     └── binary-resolver.test.ts       3 tests — override, missing, discovery
 ```
+
+### Shared Envelope Types
+
+The canonical envelope types (`AegisExecutionEnvelope`, `MxcExecutionContext`) and
+the `translateEnvelopeToPolicy()` function now live in **`src/shared/aegis-envelope.ts`**
+so they can be used by both the MXC gateway extension and the node-host Aegis enforcement
+module. The MXC extension re-exports them from `src/envelope-translator.ts` and `src/types.ts`
+for backward compatibility.
 
 ---
 

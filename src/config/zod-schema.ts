@@ -45,6 +45,21 @@ const NodeHostSchema = z
       })
       .strict()
       .optional(),
+    aegisEnforcement: z
+      .object({
+        aegisBinaryPath: z.string().refine(
+          (p) => !p.includes("..") && !/[;&|$`]/.test(p),
+          { message: "Binary path must not contain path traversal or shell metacharacters" },
+        ).optional(),
+        mxcBinaryPath: z.string().refine(
+          (p) => !p.includes("..") && !/[;&|$`]/.test(p),
+          { message: "Binary path must not contain path traversal or shell metacharacters" },
+        ).optional(),
+        daemonPipePath: z.string().optional(),
+        enabled: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .optional();

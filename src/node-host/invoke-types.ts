@@ -14,6 +14,7 @@ export type SystemRunParams = {
   approvalDecision?: string | null;
   runId?: string | null;
   suppressNotifyOnExit?: boolean | null;
+  executionMetadata?: Record<string, unknown> | null;
 };
 
 export type RunResult = {

@@ -24,6 +24,7 @@ import {
   resolveWindowsConsoleEncoding,
 } from "../infra/windows-encoding.js";
 import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
+import { resolveAegisEnforcementConfig, type ResolvedAegisEnforcementConfig } from "./aegis-config.js";
 import { buildSystemRunApprovalPlan, handleSystemRunInvoke } from "./invoke-system-run.js";
 import type {
   ExecEventPayload,
@@ -43,6 +44,17 @@ const execHostEnforced =
 const execHostFallbackAllowed =
   normalizeLowercaseStringOrEmpty(process.env.OPENCLAW_NODE_EXEC_FALLBACK ?? "") !== "0";
 const preferMacAppExecHost = process.platform === "darwin" && execHostEnforced;
+
+let cachedAegisEnforcementConfig: ResolvedAegisEnforcementConfig | null | undefined;
+
+/** Lazily resolve Aegis enforcement config from the OpenClaw config. */
+async function getAegisEnforcementConfig(): Promise<ResolvedAegisEnforcementConfig | null> {
+  if (cachedAegisEnforcementConfig !== undefined) return cachedAegisEnforcementConfig;
+  const { loadConfig } = await import("../config/config.js");
+  const cfg = loadConfig();
+  cachedAegisEnforcementConfig = resolveAegisEnforcementConfig(cfg.nodeHost?.aegisEnforcement);
+  return cachedAegisEnforcementConfig;
+}
 
 type SystemWhichParams = {
   bins: string[];
@@ -479,6 +491,8 @@ export async function handleInvoke(
     return;
   }
 
+  const aegisEnforcementConfig = await getAegisEnforcementConfig();
+
   await handleSystemRunInvoke({
     client,
     params,
@@ -500,6 +514,7 @@ export async function handleInvoke(
       await sendExecFinishedEvent({ client, sessionKey, runId, commandText, result });
     },
     preferMacAppExecHost,
+    aegisEnforcementConfig,
   });
 }
 

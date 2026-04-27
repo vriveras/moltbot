@@ -159,6 +159,7 @@ Run `openclaw doctor` to surface risky/misconfigured DM policies.
 - Default: tools run on the host for the `main` session, so the agent has full access when it is just you.
 - Group/channel safety: set `agents.defaults.sandbox.mode: "non-main"` to run non-`main` sessions inside sandboxes. Docker is the default sandbox backend; SSH and OpenShell backends are also available.
 - Typical sandbox default: allow `bash`, `process`, `read`, `write`, `edit`, `sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`; deny `browser`, `canvas`, `nodes`, `cron`, `discord`, `gateway`.
+- Node-host Aegis enforcement: when the gateway forwards `system.run` to a remote node with an `aegisCookie`, the node redeems it with the local Aegis daemon and wraps execution in an MXC sandbox (`wxc-exec`). Fail-closed — any error denies the command. See [Nodes](https://docs.openclaw.ai/nodes).
 - Before exposing anything remotely, read [Security](https://docs.openclaw.ai/gateway/security), [Sandboxing](https://docs.openclaw.ai/gateway/sandboxing), and [Configuration](https://docs.openclaw.ai/gateway/configuration).
 
 ## Operator quick refs

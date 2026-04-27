@@ -26,6 +26,7 @@ type SystemRunParamsLike = {
   approvalDecision?: unknown;
   runId?: unknown;
   suppressNotifyOnExit?: unknown;
+  executionMetadata?: unknown;
 };
 
 type ApprovalLookup = {
@@ -67,6 +68,7 @@ function pickSystemRunParams(raw: Record<string, unknown>): Record<string, unkno
     "sessionKey",
     "runId",
     "suppressNotifyOnExit",
+    "executionMetadata",
   ]) {
     if (key in raw) {
       next[key] = raw[key];

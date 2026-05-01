@@ -5,7 +5,8 @@
   "description": "OpenClaw MXC sandbox execution plugin",
   "type": "module",
   "devDependencies": {
-    "@openclaw/plugin-sdk": "workspace:*"
+    "@openclaw/plugin-sdk": "workspace:*",
+    "@microsoft/mxc-sdk": "file:C:/local/sources/mxc-aegis/sdk"
   },
   "dependencies": {},
   "openclaw": {

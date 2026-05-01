@@ -31,6 +31,8 @@ import {
 import { normalizeSystemRunApprovalPlan } from "../infra/system-run-approval-binding.js";
 import { resolveSystemRunCommandRequest } from "../infra/system-run-command.js";
 import { logWarn } from "../logger.js";
+import type { ResolvedAegisEnforcementConfig } from "./aegis-config.js";
+import { enforceAegisSandbox, AegisEnforcementError } from "./aegis-sandbox-enforcement.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { evaluateSystemRunPolicy, resolveExecApprovalDecision } from "./exec-policy.js";
@@ -190,6 +192,8 @@ export type HandleSystemRunInvokeOptions = {
   sendExecFinishedEvent: (params: ExecFinishedEventParams) => Promise<void>;
   preferMacAppExecHost: boolean;
   getRuntimeConfig?: () => OpenClawConfig;
+  aegisEnforcementConfig?: ResolvedAegisEnforcementConfig | null;
+  loadConfig?: () => Record<string, unknown>;
 };
 
 async function loadSystemRunConfig(opts: HandleSystemRunInvokeOptions): Promise<OpenClawConfig> {
@@ -668,6 +672,54 @@ async function executeSystemRunPhase(
     shellCommand: phase.shellPayload,
     segments: phase.segments,
   });
+
+  // Aegis sandbox enforcement: if executionMetadata contains an aegisCookie,
+  // redeem it via the daemon and wrap the command in MXC sandbox.
+  const executionMetadata = opts.params.executionMetadata;
+  if (executionMetadata && typeof executionMetadata === "object" && "aegisCookie" in executionMetadata) {
+    if (!opts.aegisEnforcementConfig) {
+      logWarn(`security: system.run blocked — aegisCookie present but enforcement not configured`);
+      await sendSystemRunDenied(opts, phase.execution, {
+        reason: "security=deny",
+        message: "AEGIS_ENFORCEMENT_MISSING: execution metadata requires Aegis enforcement but it is not configured",
+      });
+      return;
+    }
+    try {
+      const enforcement = await enforceAegisSandbox({
+        config: opts.aegisEnforcementConfig,
+        executionMetadata: executionMetadata as Record<string, unknown>,
+        argv: execArgv,
+        cwd: phase.cwd,
+      });
+      const result = await opts.runCommand(enforcement.argv, phase.cwd, phase.env, phase.timeoutMs);
+      applyOutputTruncation(result);
+      await sendSystemRunCompleted(
+        opts,
+        phase.execution,
+        result,
+        JSON.stringify({
+          exitCode: result.exitCode,
+          timedOut: result.timedOut,
+          success: result.success,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          error: result.error ?? null,
+        }),
+      );
+      return;
+    } catch (err) {
+      const message = err instanceof AegisEnforcementError
+        ? `AEGIS_ENFORCEMENT_FAILED: ${err.message}`
+        : `AEGIS_ENFORCEMENT_FAILED: ${String(err)}`;
+      logWarn(`security: system.run Aegis enforcement failed: ${message}`);
+      await sendSystemRunDenied(opts, phase.execution, {
+        reason: "security=deny",
+        message,
+      });
+      return;
+    }
+  }
 
   const result = await opts.runCommand(execArgv, phase.cwd, phase.env, phase.timeoutMs);
   applyOutputTruncation(result);

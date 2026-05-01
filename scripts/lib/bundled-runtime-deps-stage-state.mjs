@@ -2,8 +2,29 @@ import fs from "node:fs";
 import path from "node:path";
 
 const TRANSIENT_TEMP_REMOVE_ERROR_CODES = new Set(["EBUSY", "ENOTEMPTY", "EPERM"]);
+const TRANSIENT_RENAME_ERROR_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
+const RENAME_RETRY_DELAYS_MS = [100, 250, 500, 1000, 2000];
 const TEMP_REMOVE_RETRY_DELAYS_MS = [10, 25, 50];
 const TEMP_OWNER_FILE = "owner.json";
+
+function renameWithRetry(src, dest) {
+  for (let attempt = 0; attempt <= RENAME_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      fs.renameSync(src, dest);
+      return;
+    } catch (error) {
+      if (!TRANSIENT_RENAME_ERROR_CODES.has(error?.code)) {
+        throw error;
+      }
+      const delay = RENAME_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined) {
+        throw error;
+      }
+      const end = Date.now() + delay;
+      while (Date.now() < end) { /* busy-wait */ }
+    }
+  }
+}
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -108,15 +129,15 @@ export function replaceDirAtomically(targetPath, sourcePath) {
   let movedExistingTarget = false;
   try {
     if (fs.existsSync(targetPath)) {
-      fs.renameSync(targetPath, backupPath);
+      renameWithRetry(targetPath, backupPath);
       writeRuntimeDepsTempOwner(backupPath);
       movedExistingTarget = true;
     }
-    fs.renameSync(sourcePath, targetPath);
+    renameWithRetry(sourcePath, targetPath);
     removeOwnedTempPathBestEffort(backupPath);
   } catch (error) {
     if (movedExistingTarget && !fs.existsSync(targetPath) && fs.existsSync(backupPath)) {
-      fs.renameSync(backupPath, targetPath);
+      renameWithRetry(backupPath, targetPath);
       removePathIfExists(path.join(targetPath, TEMP_OWNER_FILE));
     }
     throw error;

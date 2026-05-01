@@ -13,8 +13,8 @@ import {
 const GENERATED_BUNDLED_SKILLS_DIR = "bundled-skills";
 const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA_PATH =
   "src/config/bundled-channel-config-metadata.generated.ts";
-const TRANSIENT_COPY_ERROR_CODES = new Set(["EEXIST", "ENOENT", "ENOTEMPTY", "EBUSY"]);
-const COPY_RETRY_DELAYS_MS = [10, 25, 50];
+const TRANSIENT_COPY_ERROR_CODES = new Set(["EEXIST", "ENOENT", "ENOTEMPTY", "EBUSY", "EPERM", "EPIPE", "EACCES"]);
+const COPY_RETRY_DELAYS_MS = [50, 100, 250, 500, 1000];
 
 function shouldCopyBundledPluginMetadata(id, env) {
   if (!NON_PACKAGED_BUNDLED_PLUGIN_DIRS.has(id)) {

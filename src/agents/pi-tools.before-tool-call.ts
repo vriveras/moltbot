@@ -35,8 +35,37 @@ export type HookContext = {
 };
 
 type HookOutcome =
-  | { blocked: true; reason: string }
+  | { blocked: true; reason: string; kind?: "veto"; deniedReason?: string }
   | { blocked: false; params: unknown; executionMetadata?: Record<string, unknown> };
+
+export class BeforeToolCallBlockedError extends Error {
+  readonly reason: string;
+  constructor(reason: string) {
+    super(reason);
+    this.name = "BeforeToolCallBlockedError";
+    this.reason = reason;
+  }
+}
+
+export function isBeforeToolCallBlockedError(err: unknown): err is BeforeToolCallBlockedError {
+  return (
+    err instanceof BeforeToolCallBlockedError ||
+    (err instanceof Error && err.name === "BeforeToolCallBlockedError")
+  );
+}
+
+export function buildBlockedToolResult(args: { reason: string; deniedReason?: string }): {
+  content: Array<{ type: "text"; text: string }>;
+  details: { status: "blocked"; reason: string; deniedReason?: string };
+} {
+  const text = args.deniedReason
+    ? `Tool call blocked: ${args.reason} (denied: ${args.deniedReason})`
+    : `Tool call blocked: ${args.reason}`;
+  return {
+    content: [{ type: "text", text }],
+    details: { status: "blocked", reason: args.reason, deniedReason: args.deniedReason },
+  };
+}
 
 const log = createSubsystemLogger("agents/tools");
 const BEFORE_TOOL_CALL_WRAPPED = Symbol("beforeToolCallWrapped");
@@ -451,7 +480,7 @@ export function wrapToolWithBeforeToolCallHook(
         signal,
       });
       if (outcome.blocked) {
-        throw new Error(outcome.reason);
+        throw new BeforeToolCallBlockedError(outcome.reason);
       }
       if (toolCallId) {
         const adjustedParamsKey = buildAdjustedParamsKey({ runId: ctx?.runId, toolCallId });

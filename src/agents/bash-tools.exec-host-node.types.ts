@@ -24,4 +24,5 @@ export type ExecuteNodeHostCommandParams = {
   notifySessionKey?: string;
   notifyOnExit?: boolean;
   trustedSafeBinDirs?: ReadonlySet<string>;
+  executionMetadata?: Record<string, unknown>;
 };

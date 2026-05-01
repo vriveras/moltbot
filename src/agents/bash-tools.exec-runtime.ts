@@ -23,7 +23,7 @@ export {
   normalizeExecSecurity,
   normalizeExecTarget,
 } from "../infra/exec-approvals.js";
-import { logWarn } from "../logger.js";
+import { logWarn, logInfo } from "../logger.js";
 import type { ManagedRun } from "../process/supervisor/index.js";
 import { getProcessSupervisor } from "../process/supervisor/index.js";
 import type { RunExit, TerminationReason } from "../process/supervisor/types.js";
@@ -47,6 +47,8 @@ import {
 } from "./bash-tools.shared.js";
 import { buildCursorPositionResponse, stripDsrRequests } from "./pty-dsr.js";
 import { getShellConfig, sanitizeBinaryOutput } from "./shell-utils.js";
+import { enforceAegisSandbox, AegisEnforcementError } from "../node-host/aegis-sandbox-enforcement.js";
+import { resolveAegisEnforcementConfig } from "../node-host/aegis-config.js";
 
 export { execSchema } from "./bash-tools.schemas.js";
 
@@ -696,6 +698,21 @@ export async function runExecProcess(opts: {
         executionMetadata: opts.executionMetadata,
       });
       sandboxFinalizeToken = backendExecSpec?.finalizeToken;
+
+      // MXC on Windows: AppContainer needs a ConPTY for stdout inheritance.
+      // Spawn wxc-exec via PTY mode so the sandboxed child shares the console.
+      if (backendExecSpec?.requirePty) {
+        const argv = backendExecSpec.argv;
+        const ptyCommand = argv.map(a => (a.includes(" ") ? `"${a}"` : a)).join(" ");
+        return {
+          mode: "pty" as const,
+          ptyCommand,
+          childFallbackArgv: argv,
+          env: backendExecSpec.env ?? process.env,
+          stdinMode: "pipe-open" as const,
+        };
+      }
+
       return {
         mode: "child" as const,
         argv: backendExecSpec?.argv ?? [
@@ -713,6 +730,34 @@ export async function runExecProcess(opts: {
           backendExecSpec?.stdinMode ??
           (opts.usePty ? ("pipe-open" as const) : ("pipe-closed" as const)),
       };
+    }
+    // Aegis MXC enforcement: when no sandbox is active but executionMetadata
+    // contains an aegisCookie, wrap the command via wxc-exec/lxc-exec.
+    if (opts.executionMetadata && "aegisCookie" in opts.executionMetadata) {
+      const aegisConfig = resolveAegisEnforcementConfig(undefined);
+      if (aegisConfig) {
+        try {
+          const enforcement = await enforceAegisSandbox({
+            config: aegisConfig,
+            executionMetadata: opts.executionMetadata,
+            argv: [getShellConfig().shell, ...getShellConfig().args, execCommand],
+            cwd: opts.workdir,
+          });
+          logInfo(`[aegis] MXC enforcement applied: original=[${execCommand}] wrapped=[${enforcement.argv.join(" ")}]`);
+          return {
+            mode: "child" as const,
+            argv: enforcement.argv,
+            env: shellRuntimeEnv,
+            stdinMode: "pipe-closed" as const,
+          };
+        } catch (err) {
+          const msg = err instanceof AegisEnforcementError ? err.message : String(err);
+          logWarn(`[aegis] MXC enforcement failed, blocking command: ${msg}`);
+          throw new Error(`AEGIS_ENFORCEMENT_FAILED: ${msg}`);
+        }
+      } else {
+        logWarn(`[aegis] aegisCookie present but enforcement not configured — running without MXC`);
+      }
     }
     const { shell, args: shellArgs } = getShellConfig();
     const childArgv = [shell, ...shellArgs, execCommand];

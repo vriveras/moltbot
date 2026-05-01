@@ -7,6 +7,9 @@ export type SandboxBackendExecSpec = {
   env: NodeJS.ProcessEnv;
   stdinMode: "pipe-open" | "pipe-closed";
   finalizeToken?: unknown;
+  /** When true, the backend requires a PTY (ConPTY) so the sandboxed child can
+   *  inherit the console for stdout/stderr. Used by MXC on Windows. */
+  requirePty?: boolean;
 };
 
 export type SandboxBackendCommandParams = {

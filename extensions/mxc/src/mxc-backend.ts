@@ -45,8 +45,8 @@ export function createMxcSandboxBackendHandle(params: {
         );
       }
 
-      // Verify ticket / extract envelope
-      const ctx = extractExecutionContext(executionMetadata, params.config.aegisPublicKeyPath);
+      // Verify ticket / extract envelope (handles cookie redemption too)
+      const ctx = await extractExecutionContext(executionMetadata, params.config.aegisPublicKeyPath, command, workdir);
 
       // Translate envelope → SandboxPolicy
       const policy = translateEnvelopeToPolicy(ctx.envelope);
@@ -58,9 +58,26 @@ export function createMxcSandboxBackendHandle(params: {
         params.config.defaultContainment as "process",
       );
 
-      // Set command and working directory
-      containerConfig.process!.commandLine = command;
-      containerConfig.process!.cwd = workdir ?? params.workdir;
+      // Wrap command with shell so built-ins (echo, cd, etc.) and pipes work.
+      // CreateProcessInSandbox needs a full executable path — PATH resolution
+      // may not work inside an AppContainer.
+      const wrappedCommand = process.platform === "win32"
+        ? `C:\\Windows\\System32\\cmd.exe /c ${command}`
+        : `/bin/sh -c ${JSON.stringify(command)}`;
+      containerConfig.process!.commandLine = wrappedCommand;
+
+      const effectiveWorkdir = workdir ?? params.workdir;
+      // BaseContainer may not ACL the cwd path before process creation.
+      // Use a universally-accessible directory as cwd; the command itself
+      // operates on absolute paths when it needs file access.
+      containerConfig.process!.cwd = process.platform === "win32"
+        ? "C:\\Windows\\System32"
+        : effectiveWorkdir;
+
+      // Ensure the sandbox can access the working directory for file operations
+      if (effectiveWorkdir && !containerConfig.filesystem!.readwritePaths!.includes(effectiveWorkdir)) {
+        containerConfig.filesystem!.readwritePaths!.push(effectiveWorkdir);
+      }
 
       // Build argv for wxc-exec/lxc-exec
       const argv = [params.binaryPath, "--config-base64", configToBase64(containerConfig)];
@@ -72,6 +89,9 @@ export function createMxcSandboxBackendHandle(params: {
         argv,
         env: { ...process.env, ...env } as NodeJS.ProcessEnv,
         stdinMode: usePty ? "pipe-open" : "pipe-closed",
+        // AppContainer runner on Windows relies on console inheritance (ConPTY).
+        // Without a PTY, stdout from the sandboxed process is lost.
+        requirePty: process.platform === "win32",
       };
     },
 

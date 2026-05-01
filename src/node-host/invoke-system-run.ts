@@ -30,7 +30,7 @@ import {
 } from "../infra/host-env-security.js";
 import { normalizeSystemRunApprovalPlan } from "../infra/system-run-approval-binding.js";
 import { resolveSystemRunCommandRequest } from "../infra/system-run-command.js";
-import { logWarn } from "../logger.js";
+import { logWarn, logInfo } from "../logger.js";
 import type { ResolvedAegisEnforcementConfig } from "./aegis-config.js";
 import { enforceAegisSandbox, AegisEnforcementError } from "./aegis-sandbox-enforcement.js";
 import { normalizeAgentId } from "../routing/session-key.js";
@@ -692,6 +692,7 @@ async function executeSystemRunPhase(
         argv: execArgv,
         cwd: phase.cwd,
       });
+      logInfo(`[aegis] MXC enforcement applied: original=[${execArgv.join(" ")}] wrapped=[${enforcement.argv.join(" ")}]`);
       const result = await opts.runCommand(enforcement.argv, phase.cwd, phase.env, phase.timeoutMs);
       applyOutputTruncation(result);
       await sendSystemRunCompleted(

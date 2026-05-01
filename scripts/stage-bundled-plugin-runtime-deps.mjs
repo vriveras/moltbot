@@ -43,8 +43,22 @@ import { resolveNpmRunner } from "./npm-runner.mjs";
 
 const exactVersionSpecRe = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+function readJson(filePath, retries = 5) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return JSON.parse(fs.readFileSync(filePath, "utf8"));
+    } catch (err) {
+      const transient = err.code === "ENOENT" || err.code === "EPERM" || err.code === "EBUSY" ||
+        (err instanceof SyntaxError && /Unexpected end of JSON/i.test(err.message));
+      if (attempt < retries && transient) {
+        const delayMs = 200 * (attempt + 1);
+        const end = Date.now() + delayMs;
+        while (Date.now() < end) { /* busy-wait */ }
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 function writeJson(filePath, value) {
@@ -64,6 +78,16 @@ function shouldStageRuntimeDeps(packageJson) {
 
 function sanitizeBundledManifestForRuntimeInstall(pluginDir) {
   const manifestPath = path.join(pluginDir, "package.json");
+  if (!fs.existsSync(manifestPath)) {
+    // Fallback: re-copy from source extensions dir (Windows Defender may have eaten it)
+    const pluginId = path.basename(pluginDir);
+    const repoRoot = path.resolve(pluginDir, "..", "..", "..");
+    const sourcePath = path.join(repoRoot, "extensions", pluginId, "package.json");
+    if (fs.existsSync(sourcePath)) {
+      fs.mkdirSync(pluginDir, { recursive: true });
+      fs.copyFileSync(sourcePath, manifestPath);
+    }
+  }
   const packageJson = readJson(manifestPath);
   let changed = false;
 

@@ -257,13 +257,18 @@ export async function enforceAegisSandbox(params: {
 
   const commandLine = shellQuoteArgv(params.argv);
 
+  // Use aegisRedeemContext if available (carries the original tool name/args/cwd
+  // that the daemon stored in the cookie), otherwise fall back to best-effort values.
+  const redeemCtx = params.executionMetadata.aegisRedeemContext as
+    { toolName?: string; args?: string; cwd?: string } | undefined;
+
   logWarn(`aegis: redeeming cookie for sandbox enforcement`);
 
   const response = await redeemCookie({
     cookie,
-    toolName: "system.run",
-    args: commandLine,
-    cwd: params.cwd,
+    toolName: redeemCtx?.toolName ?? "system.run",
+    args: redeemCtx?.args ?? commandLine,
+    cwd: redeemCtx?.cwd ?? params.cwd,
     pipePath: params.config.daemonPipePath,
   });
 

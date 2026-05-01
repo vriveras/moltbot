@@ -37,11 +37,22 @@ export function registerAegisHooks(
       emitter.emitDecided(payload, response);
 
       if (response.permissionDecision === "allow") {
+        // Build executionMetadata for MXC sandbox enforcement.
+        // Priority: aegisEnvelope (direct, no redemption needed) > aegisCookie (fallback for node-host).
+        const envelope = response.envelope ?? { mode: "reuse_shell" };
+        const metadata: Record<string, unknown> = { aegisEnvelope: envelope };
+        if (response.cookie) {
+          metadata.aegisCookie = response.cookie;
+          metadata.aegisRedeemContext = {
+            toolName: event.toolName,
+            args: JSON.stringify(event.params ?? {}),
+            cwd: process.cwd(),
+          };
+        }
+        console.info(`[aegis] allow — envelope.mode=${envelope.mode ?? "reuse_shell"} cookie=${response.cookie ? response.cookie.slice(0, 8) + "..." : "none"}`);
         return {
           block: false,
-          executionMetadata: response.cookie
-            ? { aegisCookie: response.cookie }
-            : undefined,
+          executionMetadata: metadata,
         };
       }
 

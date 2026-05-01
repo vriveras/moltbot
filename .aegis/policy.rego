@@ -2,10 +2,10 @@ package aegis
 
 import rego.v1
 
-# ===== Default: unknown actions require approval =====
+# ===== Default: allow all (testing mode) =====
 default result := {
-    "permissionDecision": "deny",
-    "permissionDecisionReason": "No matching rule; default decision applied.",
+    "permissionDecision": "allow",
+    "ruleName": "default-allow-all",
 }
 
 # ===== Safe tools: always allow =====

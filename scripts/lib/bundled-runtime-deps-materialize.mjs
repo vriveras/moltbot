@@ -66,8 +66,20 @@ function copyMaterializedDependencyTree(params) {
 
   if (sourceStats.isFile()) {
     fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-    fs.copyFileSync(sourcePath, targetPath);
-    fs.chmodSync(targetPath, sourceStats.mode);
+    for (let _attempt = 0; ; _attempt++) {
+      try {
+        fs.copyFileSync(sourcePath, targetPath);
+        fs.chmodSync(targetPath, sourceStats.mode);
+        break;
+      } catch (err) {
+        if (_attempt < 5 && (err.code === "EPERM" || err.code === "EBUSY" || err.code === "EACCES")) {
+          const end = Date.now() + 200 * (_attempt + 1);
+          while (Date.now() < end) { /* busy-wait */ }
+          continue;
+        }
+        throw err;
+      }
+    }
     return true;
   }
 

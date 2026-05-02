@@ -79,6 +79,7 @@ describe("redeemCookie", () => {
         toolName: "system.run",
         args: "echo hello",
         cwd: "/tmp",
+        pipePath: "\\\\.\\pipe\\aegis-nonexistent-test-pipe-12345",
       }),
     ).rejects.toThrow(AegisEnforcementError);
   });
@@ -89,6 +90,7 @@ describe("redeemCookie", () => {
         cookie: "test-cookie",
         toolName: "system.run",
         args: "echo hello",
+        pipePath: "\\\\.\\pipe\\aegis-nonexistent-test-pipe-12345",
       }),
     ).rejects.toThrow(/Aegis daemon/);
   });

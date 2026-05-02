@@ -208,7 +208,10 @@ describe("End-to-end integration", () => {
     expect(result).toEqual(
       expect.objectContaining({
         block: false,
-        executionMetadata: { aegisCookie: "cookie123" },
+        executionMetadata: expect.objectContaining({
+          aegisCookie: "cookie123",
+          aegisEnvelope: { mode: "reuse_shell" },
+        }),
       }),
     );
 
@@ -289,7 +292,10 @@ describe("End-to-end integration", () => {
     const { beforeHandler } = setupPipeline();
     const result = await beforeHandler(makeEvent(), makeCtx());
 
-    expect(result).toEqual({ block: false });
+    expect(result).toEqual(expect.objectContaining({ block: false }));
+    const r = result as Record<string, unknown>;
+    const meta = r.executionMetadata as Record<string, unknown>;
+    expect(meta.aegisEnvelope).toEqual({ mode: "reuse_shell" });
 
     // IPC client resolves with FAIL_OPEN allow — audit events are still emitted
     expect(auditLines).toHaveLength(2);

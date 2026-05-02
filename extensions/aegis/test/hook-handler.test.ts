@@ -113,7 +113,13 @@ describe("registerAegisHooks", () => {
     expect(result).toEqual(
       expect.objectContaining({
         block: false,
-        executionMetadata: { aegisCookie: "cookie-123" },
+        executionMetadata: expect.objectContaining({
+          aegisCookie: "cookie-123",
+          aegisEnvelope: { mode: "reuse_shell" },
+          aegisRedeemContext: expect.objectContaining({
+            toolName: "bash",
+          }),
+        }),
       }),
     );
   });
@@ -308,7 +314,10 @@ describe("registerAegisHooks", () => {
     expect(result).toBeDefined();
     const r = result as Record<string, unknown>;
     expect(r.block).toBe(false);
-    expect(r.executionMetadata).toBeUndefined();
+    const meta = r.executionMetadata as Record<string, unknown>;
+    expect(meta.aegisEnvelope).toEqual({ mode: "reuse_shell" });
+    expect(meta.aegisCookie).toBeUndefined();
+    expect(meta.aegisRedeemContext).toBeUndefined();
   });
 
   // 11. Deny without explicit reason falls back to default message

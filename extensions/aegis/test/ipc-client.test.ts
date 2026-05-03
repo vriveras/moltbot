@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
 
@@ -385,5 +385,42 @@ describe("AegisIpcClient", () => {
     const result = await promise;
     expect(result.permissionDecision).toBe("allow");
     expect(result.permissionDecisionReason).toContain("fail-open");
+  });
+
+
+  // --- getDaemonPipePath env var override ---
+
+  describe("getDaemonPipePath env override", () => {
+    const ENV_KEY = "AEGIS_DAEMON_PIPE_PATH";
+
+    afterEach(() => {
+      delete process.env[ENV_KEY];
+    });
+
+    test("returns AEGIS_DAEMON_PIPE_PATH when set", () => {
+      process.env[ENV_KEY] = "\\\\.\\pipe\\custom-test-pipe";
+      expect(getDaemonPipePath()).toBe("\\\\.\\pipe\\custom-test-pipe");
+    });
+
+    test("falls back to username-based path when env var is unset", () => {
+      delete process.env[ENV_KEY];
+      const path = getDaemonPipePath();
+      expect(path.length).toBeGreaterThan(0);
+      if (process.platform === "win32") {
+        expect(path).toMatch(/^\\\\.\\pipe\\aegis-/);
+      } else {
+        expect(path).toMatch(/^\/tmp\/CoreFxPipe_aegis-/);
+      }
+    });
+
+    test("ignores empty string env var (falsy)", () => {
+      process.env[ENV_KEY] = "";
+      const path = getDaemonPipePath();
+      if (process.platform === "win32") {
+        expect(path).toMatch(/^\\\\.\\pipe\\aegis-/);
+      } else {
+        expect(path).toMatch(/^\/tmp\/CoreFxPipe_aegis-/);
+      }
+    });
   });
 });

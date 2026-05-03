@@ -295,6 +295,21 @@ An unexpected error occurred in the extension itself. This triggers fail-closed 
 - Verify the `aegis` binary is compatible with the installed extension version.
 - Check that `auditLogPath` is writable.
 
+### Environment Variables
+
+The following environment variables affect Aegis extension behavior when running
+inside an MXC IsolationSession (gateway mode):
+
+| Variable | Description |
+|----------|-------------|
+| `AEGIS_DAEMON_PIPE_PATH` | Overrides the computed daemon pipe path. Required inside isolation sessions where `os.userInfo().username` returns the agent user, not the calling user. Set by `wxc-exec`. |
+| `MXC_ISOLATION_SESSION` | When set to `"1"`, `enforceAegisSandbox()` skips wxc-exec wrapping (the outer session already provides containment). Cookie redemption still occurs for audit. |
+| `MXC_CALLER_USER` | The calling user's username, preserved for audit logging and identity resolution inside isolation sessions. |
+
+See [`../../.plans/isolation-session-gateway/08-sentinel-env-vars.md`](../../.plans/isolation-session-gateway/08-sentinel-env-vars.md) for full details on the gateway launch flow.
+
+---
+
 ### Audit log not being written
 
 **Check:**

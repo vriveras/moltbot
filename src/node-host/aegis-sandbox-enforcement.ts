@@ -58,7 +58,9 @@ type RedeemResponse = {
 };
 
 /** Compute the daemon pipe path matching Aegis daemon naming convention. */
-function getDaemonPipePath(): string {
+export function getDaemonPipePath(): string {
+  const envOverride = process.env.AEGIS_DAEMON_PIPE_PATH;
+  if (envOverride) return envOverride;
   const pipeName = `${AEGIS_PIPE_PREFIX}${userInfo().username}`;
   return process.platform === "win32"
     ? `\\\\.\\pipe\\${pipeName}`
@@ -283,6 +285,18 @@ export async function enforceAegisSandbox(params: {
       "Aegis daemon returned empty execution envelope — cannot determine sandbox constraints",
     );
   }
+
+  // When running inside an MXC isolation session the outer container already
+  // provides sandboxing.  Skip wxc-exec wrapping but keep cookie redemption
+  // above so the audit trail is recorded.  (DoD-7, DoD-19)
+  if (process.env.MXC_ISOLATION_SESSION === "1") {
+    logWarn("aegis: MXC_ISOLATION_SESSION=1 — skipping wxc-exec wrapping (outer sandbox active)");
+    return {
+      argv: params.argv,
+      enforced: true,
+    };
+  }
+
   const envelope = response.envelope;
   const policy = translateEnvelopeToPolicy(envelope);
   const configBase64 = buildContainerConfigBase64(policy, commandLine, params.cwd);

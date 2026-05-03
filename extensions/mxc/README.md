@@ -256,3 +256,33 @@ node openclaw.mjs
 - **Aegis** and **MXC** are fully decoupled — they communicate only through `executionMetadata`.
 - **Aegis** is not required if you provide `aegisEnvelope` directly (development mode).
 - **MXC** is not required if you only need policy decisions without enforcement.
+
+---
+
+## Gateway Mode (IsolationSession)
+
+When running in **gateway mode**, the entire node-host runs inside an MXC
+IsolationSession. This inverts the sandbox model: instead of wrapping each tool
+call with wxc-exec, the agent process itself is sandboxed.
+
+### Sentinel Environment Variables
+
+`wxc-exec` injects these env vars into the isolation session:
+
+| Variable | Value | Purpose |
+|----------|-------|---------|
+| `MXC_ISOLATION_SESSION` | `"1"` | Signals the node-host is inside an isolation session. `enforceAegisSandbox()` skips wxc-exec wrapping when this is `"1"`. |
+| `AEGIS_DAEMON_PIPE_PATH` | `\\.\pipe\aegis-<CallingUser>` | Overrides the daemon pipe path so the agent user can reach the host's Aegis daemon. |
+| `MXC_CALLER_USER` | `<CallingUser>` | Preserves the calling user's identity (since `whoami` returns the agent user inside the session). |
+
+### How It Works
+
+1. `wxc-exec --experimental` launches `node runner.js` inside an isolation
+   session with `timeout=0`.
+2. The agent user (`User-IEB-NNN`) is provisioned and the workspace is ACL'd.
+3. Node-host reads `AEGIS_DAEMON_PIPE_PATH` to connect to the Aegis daemon.
+4. On tool calls, Aegis cookie redemption occurs for audit, but wxc-exec
+   wrapping is skipped (`MXC_ISOLATION_SESSION=1`).
+5. Commands execute directly under the agent user's security context.
+
+See [`../../.plans/isolation-session-gateway/08-sentinel-env-vars.md`](../../.plans/isolation-session-gateway/08-sentinel-env-vars.md) for the full architecture diagram and launch flow.

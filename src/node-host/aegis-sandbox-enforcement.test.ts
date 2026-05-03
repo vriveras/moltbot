@@ -3,6 +3,7 @@ import {
   enforceAegisSandbox,
   redeemCookie,
   AegisEnforcementError,
+  getDaemonPipePath,
 } from "./aegis-sandbox-enforcement.js";
 import { translateEnvelopeToPolicy, type AegisExecutionEnvelope } from "../shared/aegis-envelope.js";
 import type { ResolvedAegisEnforcementConfig } from "./aegis-config.js";

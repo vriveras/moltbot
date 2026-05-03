@@ -17,7 +17,9 @@ export class TicketVerificationError extends Error {
   }
 }
 
-function getDaemonPipePath(): string {
+export function getDaemonPipePath(): string {
+  const envOverride = process.env.AEGIS_DAEMON_PIPE_PATH;
+  if (envOverride) return envOverride;
   const pipeName = `${AEGIS_PIPE_PREFIX}${userInfo().username}`;
   return process.platform === "win32"
     ? `\\\\.\\pipe\\${pipeName}`

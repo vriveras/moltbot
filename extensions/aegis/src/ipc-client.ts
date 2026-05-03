@@ -23,6 +23,8 @@ const MAX_STDOUT_BYTES = 1_048_576; // 1 MB
 
 /** Compute the IPC pipe path matching the aegis daemon (DaemonCommand.GetPipeName()). */
 export function getDaemonPipePath(): string {
+  const envOverride = process.env.AEGIS_DAEMON_PIPE_PATH;
+  if (envOverride) return envOverride;
   const pipeName = `${AEGIS_PIPE_PREFIX}${userInfo().username}`;
   if (process.platform === "win32") {
     return `\\\\.\\pipe\\${pipeName}`;

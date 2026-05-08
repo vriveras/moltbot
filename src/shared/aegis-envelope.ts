@@ -24,7 +24,14 @@ export type MxcExecutionContext = {
 
 /**
  * MXC sandbox policy shape. Defined inline to avoid importing @microsoft/mxc-sdk
- * in contexts where it may not be available (e.g., node-host).
+ * in contexts where it may not be available (e.g., node-host core).
+ *
+ * Why not use the SDK?  This file lives in src/shared/ which is part of core.
+ * The MXC SDK (@microsoft/mxc-sdk) is an optional dependency brought in by the
+ * MXC extension plugin (extensions/mxc/).  Core must boot without it — if the
+ * SDK isn't installed the gateway must still start.  The wxc-exec config shape
+ * is trivial (6 fields), so duplicating the type here avoids a hard dependency
+ * on an optional package.
  */
 export type SandboxPolicyLike = {
   version: string;

@@ -1,4 +1,3 @@
-import { spawn, type ChildProcess } from "node:child_process";
 import { connect, type Socket } from "node:net";
 import { userInfo } from "node:os";
 import type { OpenClawActionPayload } from "./action-request.js";
@@ -39,7 +38,6 @@ export class AegisIpcClient {
   private readonly getFailBehaviorFn?: () => "allow" | "deny";
   private readonly connectTimeoutMs: number;
   private readonly readTimeoutMs: number;
-  private readonly activeChildren = new Set<ChildProcess>();
 
   constructor(options: AegisIpcClientOptions) {
     this.binaryPath = options.aegisBinaryPath;
@@ -52,43 +50,48 @@ export class AegisIpcClient {
 
   decide(payload: OpenClawActionPayload): Promise<AegisDaemonResponse> {
     return new Promise<AegisDaemonResponse>((resolve) => {
-      let child: ChildProcess;
       let settled = false;
-      let stdout = "";
+      let socket: Socket;
+      let responseData = "";
 
       const settle = (result: AegisDaemonResponse): void => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        this.cleanup(child);
+        try {
+          socket.destroy();
+        } catch {
+          // ignore cleanup errors
+        }
         resolve(result);
       };
 
       try {
-        child = spawn(this.binaryPath, ["decide", "--openclaw"], {
-          stdio: ["pipe", "pipe", "pipe"],
-        });
+        socket = connect({ path: getDaemonPipePath() });
       } catch {
-        settled = true;
         resolve(this.getFailResponse());
         return;
       }
 
-      this.activeChildren.add(child);
+      const timer = setTimeout(() => settle(this.getFailResponse()), this.readTimeoutMs);
 
-      const timer = setTimeout(() => {
-        settle(this.getFailResponse());
-      }, this.readTimeoutMs);
+      socket.on("connect", () => {
+        try {
+          socket.write(JSON.stringify(payload) + "\n");
+        } catch {
+          settle(this.getFailResponse());
+        }
+      });
 
-      child.stdout!.on("data", (chunk: Buffer) => {
-        stdout += chunk.toString();
-        if (stdout.length > MAX_STDOUT_BYTES) {
+      socket.on("data", (chunk: Buffer) => {
+        responseData += chunk.toString();
+        if (responseData.length > MAX_STDOUT_BYTES) {
           settle(this.getFailResponse());
           return;
         }
-        const newlineIdx = stdout.indexOf("\n");
+        const newlineIdx = responseData.indexOf("\n");
         if (newlineIdx !== -1) {
-          const line = stdout.slice(0, newlineIdx).trim();
+          const line = responseData.slice(0, newlineIdx).trim();
           try {
             settle(this.validateResponse(JSON.parse(line)));
           } catch {
@@ -97,17 +100,11 @@ export class AegisIpcClient {
         }
       });
 
-      child.on("error", () => {
-        settle(this.getFailResponse());
-      });
+      socket.on("error", () => settle(this.getFailResponse()));
 
-      child.on("close", (code) => {
+      socket.on("close", () => {
         if (settled) return;
-        if (code !== 0) {
-          settle(this.getFailResponse());
-          return;
-        }
-        const line = stdout.trim();
+        const line = responseData.trim();
         if (!line) {
           settle(this.getFailResponse());
           return;
@@ -118,13 +115,6 @@ export class AegisIpcClient {
           settle(this.getFailResponse());
         }
       });
-
-      try {
-        child.stdin!.write(JSON.stringify(payload) + "\n");
-        child.stdin!.end();
-      } catch {
-        settle(this.getFailResponse());
-      }
     });
   }
 
@@ -160,10 +150,7 @@ export class AegisIpcClient {
   }
 
   dispose(): void {
-    for (const child of this.activeChildren) {
-      this.cleanup(child);
-    }
-    this.activeChildren.clear();
+    // No-op: pipe connections are short-lived and self-closing.
   }
 
   private getFailResponse(): AegisDaemonResponse {
@@ -197,16 +184,5 @@ export class AegisIpcClient {
       return this.getFailResponse();
     }
     return raw as AegisDaemonResponse;
-  }
-
-  private cleanup(child: ChildProcess): void {
-    try {
-      this.activeChildren.delete(child);
-      if (!child.killed) {
-        child.kill();
-      }
-    } catch {
-      // ignore cleanup errors
-    }
   }
 }

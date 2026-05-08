@@ -1409,7 +1409,7 @@
     "plugins:boundary-report:json": "node --import tsx scripts/plugin-boundary-report.ts --json",
     "plugins:boundary-report:summary": "node --import tsx scripts/plugin-boundary-report.ts --summary",
     "plugins:sync": "node --import tsx scripts/sync-plugin-versions.ts",
-    "postinstall": "node scripts/postinstall-bundled-plugins.mjs",
+    "postinstall": "node scripts/postinstall-bundled-plugins.mjs && node scripts/fix-isolation-acls.mjs",
     "preinstall": "node scripts/preinstall-package-manager-warning.mjs",
     "prepack": "node --import tsx scripts/openclaw-prepack.ts",
     "prepare": "command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath git-hooks || exit 0",

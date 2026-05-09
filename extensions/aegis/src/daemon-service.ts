@@ -3,6 +3,7 @@ import type { OpenClawPluginService } from "openclaw/plugin-sdk/plugin-entry";
 import type { AegisPluginConfig } from "./config.js";
 import type { AegisIpcClient } from "./ipc-client.js";
 import { DEFAULT_HEALTH_CHECK_INTERVAL_MS } from "./constants.js";
+import { resolveBundledAegisBinary } from "./binary-resolver.js";
 
 export type AegisDaemonServiceOptions = {
   config: AegisPluginConfig;
@@ -25,7 +26,7 @@ export function createAegisDaemonService(
 
       const alreadyRunning = await client.healthCheck();
       if (!alreadyRunning) {
-        const binaryPath = config.aegisBinaryPath ?? "aegis";
+        const binaryPath = config.aegisBinaryPath ?? resolveBundledAegisBinary() ?? "aegis";
 
         // Validate binary path
         if (binaryPath.includes("..") || /[;&|$`]/.test(binaryPath)) {

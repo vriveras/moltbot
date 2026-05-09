@@ -4,12 +4,14 @@ import * as path from "node:path";
 
 /** Well-known search paths for wxc-exec on Windows. */
 const WXC_SEARCH_PATHS = [
+  path.join(process.cwd(), "bin", "wxc-exec.exe"),
   "wxc-exec.exe",
   path.join(os.homedir(), ".mxc", "wxc-exec.exe"),
 ];
 
 /** Well-known search paths for lxc-exec on Linux. */
 const LXC_SEARCH_PATHS = [
+  path.join(process.cwd(), "bin", "lxc-exec"),
   "lxc-exec",
   "/usr/local/bin/lxc-exec",
   path.join(os.homedir(), ".mxc", "lxc-exec"),

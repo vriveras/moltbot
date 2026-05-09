@@ -9,13 +9,14 @@ import { registerAegisHooks } from "./hook-handler.js";
 import { registerAegisAfterHooks } from "./after-hook-handler.js";
 import { createAegisDaemonService } from "./daemon-service.js";
 import { DEFAULT_FAIL_BEHAVIOR } from "./constants.js";
+import { resolveBundledAegisBinary } from "./binary-resolver.js";
 
 export function registerAegisPlugin(api: OpenClawPluginApi): void {
   const getConfig = () => resolveConfig(api.pluginConfig);
   const config = getConfig();
 
   const client = new AegisIpcClient({
-    aegisBinaryPath: config.aegisBinaryPath ?? "aegis",
+    aegisBinaryPath: config.aegisBinaryPath ?? resolveBundledAegisBinary() ?? "aegis",
     failBehavior: config.failBehavior,
     getFailBehavior: () => getConfig().failBehavior ?? DEFAULT_FAIL_BEHAVIOR,
   });

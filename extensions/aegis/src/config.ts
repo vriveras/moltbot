@@ -5,6 +5,7 @@ import {
   DEFAULT_APPROVAL_TIMEOUT_BEHAVIOR,
   DEFAULT_APPROVAL_SEVERITY,
   DEFAULT_FAIL_BEHAVIOR,
+  DEFAULT_HEALTH_CHECK_INTERVAL_MS,
 } from "./constants.js";
 
 export type AegisPluginConfig = {
@@ -16,6 +17,7 @@ export type AegisPluginConfig = {
   approvalTimeoutMs?: number;
   approvalTimeoutBehavior?: "allow" | "deny";
   approvalSeverity?: "info" | "warning" | "critical";
+  healthCheckIntervalMs?: number;
   /** @deprecated Use `redactKeyPatterns` and `redactValuePatterns` instead. */
   redactPatterns?: string[];
   redactKeyPatterns?: string[];
@@ -28,6 +30,7 @@ export const DEFAULT_CONFIG: AegisPluginConfig = {
   approvalTimeoutMs: DEFAULT_APPROVAL_TIMEOUT_MS,
   approvalTimeoutBehavior: DEFAULT_APPROVAL_TIMEOUT_BEHAVIOR,
   approvalSeverity: DEFAULT_APPROVAL_SEVERITY,
+  healthCheckIntervalMs: DEFAULT_HEALTH_CHECK_INTERVAL_MS,
   redactPatterns: undefined,
   redactKeyPatterns: undefined,
   redactValuePatterns: undefined,
@@ -106,6 +109,10 @@ export function resolveConfig(raw: unknown): AegisPluginConfig {
       input.approvalSeverity === "critical"
         ? input.approvalSeverity
         : DEFAULT_CONFIG.approvalSeverity,
+    healthCheckIntervalMs:
+      typeof input.healthCheckIntervalMs === "number"
+        ? input.healthCheckIntervalMs
+        : DEFAULT_CONFIG.healthCheckIntervalMs,
     redactPatterns: legacyRedactPatterns ?? DEFAULT_CONFIG.redactPatterns,
     redactKeyPatterns,
     redactValuePatterns,

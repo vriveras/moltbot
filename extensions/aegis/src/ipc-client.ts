@@ -144,7 +144,13 @@ export class AegisIpcClient {
 
       const timer = setTimeout(() => settle(false), this.connectTimeoutMs);
 
-      socket.on("connect", () => settle(true));
+      socket.on("connect", () => {
+        // Send a ping request the daemon can handle gracefully
+        try {
+          socket.write('{"ping":true}\n');
+        } catch { /* ignore */ }
+        settle(true);
+      });
       socket.on("error", () => settle(false));
     });
   }

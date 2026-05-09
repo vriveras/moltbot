@@ -74,7 +74,13 @@ export function createAegisDaemonService(
         try {
           const ok = await client.healthCheck();
           if (!ok) {
-            ctx.logger.warn("Aegis daemon health check failed");
+            ctx.logger.warn("Aegis daemon not reachable — restarting");
+            try {
+              const restartPath = config.aegisBinaryPath ?? resolveBundledAegisBinary() ?? "aegis";
+              const child = spawn(restartPath, ["--daemon"], { detached: true, stdio: "ignore" });
+              child.on("error", () => {});
+              child.unref();
+            } catch { /* best effort */ }
           }
         } catch (err) {
           ctx.logger.warn(`Aegis daemon health check error: ${err}`);

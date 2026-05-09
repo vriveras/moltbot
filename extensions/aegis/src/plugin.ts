@@ -31,7 +31,7 @@ export function registerAegisPlugin(api: OpenClawPluginApi): void {
   registerAegisHooks(api, getClient, emitter, getConfig);
   registerAegisAfterHooks(api, emitter, getConfig);
 
-  const daemonService = createAegisDaemonService(getConfig, getClient);
+  const daemonService = createAegisDaemonService();
   api.registerService(daemonService);
 
   // Register cleanup service for client and emitter
